@@ -193,10 +193,19 @@ class ScheduleScraper:
                 match["match_url"] = href
 
         # --- Date stamp (e.g. "1/31" or "7/19") ---
+        # For completed matches the stamp shows "Final", so also parse from URL
         date_elem = await elem.query_selector("[class*='status-stamp']")
         if date_elem:
             date_text = (await date_elem.inner_text()).strip()
-            match["match_date"] = date_text
+            if date_text.lower() == "final":
+                match["status"] = "final"
+                # Extract date from match URL instead (e.g., -02-18-2025)
+                if match.get("match_url"):
+                    url_date = re.search(r'-(\d{2})-(\d{2})-(\d{4})$', match["match_url"].rstrip('/'))
+                    if url_date:
+                        match["match_date"] = f"{url_date.group(3)}-{url_date.group(1)}-{url_date.group(2)}"
+            else:
+                match["match_date"] = date_text
 
         # --- Competition ---
         comp_elem = await elem.query_selector("[class*='match-competition']")
