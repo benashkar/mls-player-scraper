@@ -30,6 +30,7 @@ from scrapers.db import init_database
 from scrapers.roster_scraper import RosterScraper
 from scrapers.highschool_scraper import HighSchoolScraper
 from scrapers.highschool_wikipedia import WikipediaHighSchoolScraper
+from scrapers.highschool_grokipedia import GrokipediaHighSchoolScraper
 from scrapers.schedule_scraper import ScheduleScraper
 from scrapers.view_data import show_players, show_stats
 
@@ -97,6 +98,12 @@ async def scrape_highschool_wikipedia(team_filter: str = None):
     await scraper.process_us_players(team_filter=team_filter)
 
 
+async def scrape_highschool_grokipedia(team_filter: str = None):
+    """Find high school data via Grokipedia."""
+    scraper = GrokipediaHighSchoolScraper()
+    await scraper.process_us_players(team_filter=team_filter)
+
+
 def main():
     import argparse
 
@@ -106,6 +113,7 @@ def main():
     parser.add_argument("--team", help="Team filter (slug for roster, name for highschool)")
     parser.add_argument("--highschool", action="store_true", help="Find high school data (club sites)")
     parser.add_argument("--highschool-wiki", action="store_true", help="Find high school data (Wikipedia)")
+    parser.add_argument("--highschool-grok", action="store_true", help="Find high school data (Grokipedia)")
     parser.add_argument("--highschool-player", help="Search high school for specific player")
     parser.add_argument("--schedules", action="store_true", help="Scrape match schedules")
     parser.add_argument("--sched-start", help="Schedule start date YYYY-MM-DD")
@@ -132,6 +140,10 @@ def main():
         team = args.team if args.team else None
         print(f"Finding high school data via Wikipedia{' for ' + team if team else ''}...")
         asyncio.run(scrape_highschool_wikipedia(team))
+    elif args.highschool_grok:
+        team = args.team if args.team else None
+        print(f"Finding high school data via Grokipedia{' for ' + team if team else ''}...")
+        asyncio.run(scrape_highschool_grokipedia(team))
     elif args.highschool:
         team = args.team if args.team else None
         print(f"Finding high school data for players{' in ' + team if team else ''}...")
