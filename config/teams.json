@@ -1,0 +1,222 @@
+{
+  "season": 2026,
+  "season_dates": {
+    "start": "2026-02-21",
+    "world_cup_break_start": "2026-05-25",
+    "world_cup_break_end": "2026-07-16",
+    "decision_day": "2026-11-07",
+    "games_per_team": 34
+  },
+  "teams": [
+    {
+      "name": "Atlanta United",
+      "slug": "atlanta-united",
+      "domain": "atlutd.com",
+      "roster_url": "https://www.atlutd.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/atlanta-united/schedule/"
+    },
+    {
+      "name": "Austin FC",
+      "slug": "austin-fc",
+      "domain": "austinfc.com",
+      "roster_url": "https://www.austinfc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/austin-fc/schedule/"
+    },
+    {
+      "name": "Charlotte FC",
+      "slug": "charlotte-fc",
+      "domain": "charlottefootballclub.com",
+      "roster_url": "https://www.charlottefootballclub.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/charlotte-fc/schedule/"
+    },
+    {
+      "name": "Chicago Fire FC",
+      "slug": "chicago-fire-fc",
+      "domain": "chicagofirefc.com",
+      "roster_url": "https://www.chicagofirefc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/chicago-fire-fc/schedule/"
+    },
+    {
+      "name": "FC Cincinnati",
+      "slug": "fc-cincinnati",
+      "domain": "fccincinnati.com",
+      "roster_url": "https://www.fccincinnati.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/fc-cincinnati/schedule/"
+    },
+    {
+      "name": "Colorado Rapids",
+      "slug": "colorado-rapids",
+      "domain": "coloradorapids.com",
+      "roster_url": "https://www.coloradorapids.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/colorado-rapids/schedule/"
+    },
+    {
+      "name": "Columbus Crew",
+      "slug": "columbus-crew",
+      "domain": "columbuscrew.com",
+      "roster_url": "https://www.columbuscrew.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/columbus-crew/schedule/"
+    },
+    {
+      "name": "FC Dallas",
+      "slug": "fc-dallas",
+      "domain": "fcdallas.com",
+      "roster_url": "https://www.fcdallas.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/fc-dallas/schedule/"
+    },
+    {
+      "name": "D.C. United",
+      "slug": "d-c-united",
+      "domain": "dcunited.com",
+      "roster_url": "https://www.dcunited.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/d-c-united/schedule/"
+    },
+    {
+      "name": "Houston Dynamo FC",
+      "slug": "houston-dynamo-fc",
+      "domain": "houstondynamofc.com",
+      "roster_url": "https://www.houstondynamofc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/houston-dynamo-fc/schedule/"
+    },
+    {
+      "name": "Sporting Kansas City",
+      "slug": "sporting-kansas-city",
+      "domain": "sportingkc.com",
+      "roster_url": "https://www.sportingkc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/sporting-kansas-city/schedule/"
+    },
+    {
+      "name": "LA Galaxy",
+      "slug": "la-galaxy",
+      "domain": "lagalaxy.com",
+      "roster_url": "https://www.lagalaxy.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/la-galaxy/schedule/"
+    },
+    {
+      "name": "LAFC",
+      "slug": "los-angeles-football-club",
+      "domain": "lafc.com",
+      "roster_url": "https://www.lafc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/los-angeles-football-club/schedule/"
+    },
+    {
+      "name": "Inter Miami CF",
+      "slug": "inter-miami-cf",
+      "domain": "intermiamicf.com",
+      "roster_url": "https://www.intermiamicf.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/inter-miami-cf/schedule/"
+    },
+    {
+      "name": "Minnesota United FC",
+      "slug": "minnesota-united-fc",
+      "domain": "mnufc.com",
+      "roster_url": "https://www.mnufc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/minnesota-united-fc/schedule/"
+    },
+    {
+      "name": "CF Montréal",
+      "slug": "cf-montreal",
+      "domain": "cfmontreal.com",
+      "roster_url": "https://www.cfmontreal.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/cf-montreal/schedule/"
+    },
+    {
+      "name": "Nashville SC",
+      "slug": "nashville-sc",
+      "domain": "nashvillesc.com",
+      "roster_url": "https://www.nashvillesc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/nashville-sc/schedule/"
+    },
+    {
+      "name": "New England Revolution",
+      "slug": "new-england-revolution",
+      "domain": "revolutionsoccer.net",
+      "roster_url": "https://www.revolutionsoccer.net/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/new-england-revolution/schedule/"
+    },
+    {
+      "name": "New York Red Bulls",
+      "slug": "new-york-red-bulls",
+      "domain": "newyorkredbulls.com",
+      "roster_url": "https://www.newyorkredbulls.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/new-york-red-bulls/schedule/"
+    },
+    {
+      "name": "New York City FC",
+      "slug": "new-york-city-football-club",
+      "domain": "newyorkcityfc.com",
+      "roster_url": "https://www.newyorkcityfc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/new-york-city-football-club/schedule/"
+    },
+    {
+      "name": "Orlando City SC",
+      "slug": "orlando-city-sc",
+      "domain": "orlandocitysc.com",
+      "roster_url": "https://www.orlandocitysc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/orlando-city-sc/schedule/"
+    },
+    {
+      "name": "Philadelphia Union",
+      "slug": "philadelphia-union",
+      "domain": "philadelphiaunion.com",
+      "roster_url": "https://www.philadelphiaunion.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/philadelphia-union/schedule/"
+    },
+    {
+      "name": "Portland Timbers",
+      "slug": "portland-timbers",
+      "domain": "timbers.com",
+      "roster_url": "https://www.timbers.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/portland-timbers/schedule/"
+    },
+    {
+      "name": "Real Salt Lake",
+      "slug": "real-salt-lake",
+      "domain": "rsl.com",
+      "roster_url": "https://www.rsl.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/real-salt-lake/schedule/"
+    },
+    {
+      "name": "San Diego FC",
+      "slug": "san-diego-fc",
+      "domain": "sandiegofc.com",
+      "roster_url": "https://www.sandiegofc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/san-diego-fc/schedule/"
+    },
+    {
+      "name": "San Jose Earthquakes",
+      "slug": "san-jose-earthquakes",
+      "domain": "sjearthquakes.com",
+      "roster_url": "https://www.sjearthquakes.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/san-jose-earthquakes/schedule/"
+    },
+    {
+      "name": "Seattle Sounders FC",
+      "slug": "seattle-sounders-fc",
+      "domain": "soundersfc.com",
+      "roster_url": "https://www.soundersfc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/seattle-sounders-fc/schedule/"
+    },
+    {
+      "name": "St. Louis CITY SC",
+      "slug": "st-louis-city-sc",
+      "domain": "stlcitysc.com",
+      "roster_url": "https://www.stlcitysc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/st-louis-city-sc/schedule/"
+    },
+    {
+      "name": "Toronto FC",
+      "slug": "toronto-fc",
+      "domain": "torontofc.ca",
+      "roster_url": "https://www.torontofc.ca/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/toronto-fc/schedule/"
+    },
+    {
+      "name": "Vancouver Whitecaps FC",
+      "slug": "vancouver-whitecaps-fc",
+      "domain": "whitecapsfc.com",
+      "roster_url": "https://www.whitecapsfc.com/roster/",
+      "schedule_url": "https://www.mlssoccer.com/clubs/vancouver-whitecaps-fc/schedule/"
+    }
+  ]
+}
