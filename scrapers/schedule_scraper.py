@@ -1,13 +1,15 @@
 """
 MLS Schedule Scraper
 
-Scrapes match schedules from MLS.com for all teams.
+Scrapes the full MLS season schedule from mlssoccer.com/schedule/scores.
+Loads the page once, sets the start date via hash navigation, then clicks
+the "next week" button to walk through the entire season.
 """
 import asyncio
 import re
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
@@ -23,9 +25,95 @@ load_dotenv()
 REQUEST_DELAY = float(os.getenv("REQUEST_DELAY", "1.5"))
 HEADLESS = os.getenv("HEADLESS", "true").lower() == "true"
 
+# Maps schedule page short names -> roster table team names.
+# This lets us JOIN schedules to players on home_team / away_team.
+# The raw page text is kept in home_team_raw / away_team_raw.
+TEAM_NAME_MAP = {
+    "Atlanta": "Atlanta United",
+    "Austin": "Austin FC",
+    "Charlotte": "Charlotte FC",
+    "Chicago": "Chicago Fire FC",
+    "Cincinnati": "FC Cincinnati",
+    "Colorado": "Colorado Rapids",
+    "Columbus": "Columbus Crew",
+    "D.C. United": "D.C. United",
+    "Dallas": "FC Dallas",
+    "Houston": "Houston Dynamo FC",
+    "Kansas City": "Sporting Kansas City",
+    "LA Galaxy": "LA Galaxy",
+    "LAFC": "LAFC",
+    "Miami": "Inter Miami CF",
+    "Minnesota": "Minnesota United FC",
+    "Montréal": "CF Montréal",
+    "Nashville": "Nashville SC",
+    "New England": "New England Revolution",
+    "New York": "New York Red Bulls",
+    "New York City": "New York City FC",
+    "Orlando": "Orlando City SC",
+    "Philadelphia": "Philadelphia Union",
+    "Portland": "Portland Timbers",
+    "Salt Lake": "Real Salt Lake",
+    "San Diego": "San Diego FC",
+    "San Jose": "San Jose Earthquakes",
+    "Seattle": "Seattle Sounders FC",
+    "St. Louis": "St. Louis CITY SC",
+    "Toronto": "Toronto FC",
+    "Vancouver": "Vancouver Whitecaps FC",
+}
+
+# Abbreviation fallback map (abbr -> short name for lookup in TEAM_NAME_MAP)
+ABBR_MAP = {
+    "ATL": "Atlanta",
+    "ATX": "Austin",
+    "CLT": "Charlotte",
+    "CHI": "Chicago",
+    "CIN": "Cincinnati",
+    "COL": "Colorado",
+    "CLB": "Columbus",
+    "DC": "D.C. United",
+    "DAL": "Dallas",
+    "HOU": "Houston",
+    "SKC": "Kansas City",
+    "LA": "LA Galaxy",
+    "LAFC": "LAFC",
+    "MIA": "Miami",
+    "MIN": "Minnesota",
+    "MTL": "Montréal",
+    "NSH": "Nashville",
+    "NE": "New England",
+    "RBNY": "New York",
+    "NYC": "New York City",
+    "ORL": "Orlando",
+    "PHI": "Philadelphia",
+    "POR": "Portland",
+    "RSL": "Salt Lake",
+    "SD": "San Diego",
+    "SJ": "San Jose",
+    "SEA": "Seattle",
+    "STL": "St. Louis",
+    "TOR": "Toronto",
+    "VAN": "Vancouver",
+}
+
+
+def normalize_team(raw_name: str, abbreviation: str = "") -> str:
+    """Convert a schedule page team name to the roster-standard name."""
+    # Strip Leagues Cup seeding like "(10)" from end of name
+    clean = re.sub(r'\s*\(\d+\)\s*$', '', raw_name).strip()
+
+    if clean in TEAM_NAME_MAP:
+        return TEAM_NAME_MAP[clean]
+    if abbreviation and abbreviation in ABBR_MAP:
+        short = ABBR_MAP[abbreviation]
+        return TEAM_NAME_MAP.get(short, raw_name)
+    # Also try the raw name with "FC" stripped for partial matches
+    if raw_name in TEAM_NAME_MAP:
+        return TEAM_NAME_MAP[raw_name]
+    return raw_name
+
 
 class ScheduleScraper:
-    """Scrapes MLS schedules."""
+    """Scrapes the full MLS season schedule week-by-week."""
 
     def __init__(self):
         self.browser = None
@@ -50,301 +138,306 @@ class ScheduleScraper:
         if self.playwright:
             await self.playwright.stop()
 
-    async def scrape_full_schedule(self) -> list:
-        """Scrape the full MLS season schedule."""
-        page = await self.context.new_page()
+    async def _get_week_label(self, page) -> str:
+        """Read the displayed week range from the header."""
+        header = await page.query_selector(".mls-c-schedule__header")
+        if header:
+            text = await header.inner_text()
+            return text.split("\n")[0].strip()
+        return ""
+
+    async def _extract_week_matches(self, page) -> list:
+        """Extract all matches from the currently loaded week."""
         matches = []
 
-        try:
-            # MLS schedule page
-            url = f"https://www.mlssoccer.com/schedule/scores#competition=mls-regular-season&club=all&date={self.season}"
-            print(f"Fetching MLS schedule: {url}")
+        match_elements = await page.query_selector_all(".mls-c-match-list__match")
+        if not match_elements:
+            return matches
 
-            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
-            await asyncio.sleep(5)  # Let JS render
-
-            # Try to find match elements
-            match_elements = await self._find_match_elements(page)
-            print(f"Found {len(match_elements)} match elements")
-
-            for elem in match_elements:
-                try:
-                    match = await self._extract_match_data(elem)
-                    if match and match.get("home_team") and match.get("away_team"):
-                        matches.append(match)
-                except Exception as e:
-                    print(f"  Error extracting match: {e}")
-                    continue
-
-            print(f"Extracted {len(matches)} matches")
-            log_scrape("schedule", "all", url, "success", len(matches))
-
-        except PlaywrightTimeout:
-            print("Timeout loading schedule page")
-            log_scrape("schedule", "all", url, "error", 0, "Timeout")
-        except Exception as e:
-            print(f"Error scraping schedule: {e}")
-            log_scrape("schedule", "all", url, "error", 0, str(e))
-        finally:
-            await page.close()
+        for elem in match_elements:
+            try:
+                match = await self._parse_match_element(elem)
+                if match and match.get("home_team") and match.get("away_team"):
+                    matches.append(match)
+            except Exception:
+                continue
 
         return matches
 
-    async def scrape_team_schedule(self, team: dict) -> list:
-        """Scrape schedule for a single team."""
-        page = await self.context.new_page()
-        matches = []
-
-        try:
-            url = f"https://www.mlssoccer.com/clubs/{team['slug']}/schedule/"
-            print(f"  Scraping: {team['name']}")
-
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            await asyncio.sleep(3)
-
-            # Get page content and extract matches
-            match_rows = await page.query_selector_all("[class*='match'], [class*='schedule'] tr, [class*='game']")
-
-            for row in match_rows:
-                try:
-                    match = await self._extract_match_from_row(row, team["name"])
-                    if match and match.get("home_team") and match.get("away_team"):
-                        matches.append(match)
-                except:
-                    continue
-
-            # Also try extracting from page text
-            if len(matches) < 10:
-                text_matches = await self._extract_matches_from_text(page, team["name"])
-                matches.extend(text_matches)
-
-            print(f"    Found {len(matches)} matches")
-            log_scrape("schedule", team["slug"], url, "success", len(matches))
-
-        except Exception as e:
-            print(f"    Error: {e}")
-            log_scrape("schedule", team["slug"], "", "error", 0, str(e))
-        finally:
-            await page.close()
-
-        return matches
-
-    async def _find_match_elements(self, page):
-        """Find match elements on the page."""
-        selectors = [
-            "[class*='MatchCard']",
-            "[class*='match-card']",
-            "[class*='fixture']",
-            "[class*='game-card']",
-            "article[class*='match']",
-        ]
-
-        for selector in selectors:
-            elements = await page.query_selector_all(selector)
-            if elements and len(elements) > 0:
-                return elements
-
-        return []
-
-    async def _extract_match_data(self, elem) -> dict:
-        """Extract match data from an element."""
+    async def _parse_match_element(self, elem) -> dict:
+        """Parse a single .mls-c-match-list__match element into a dict."""
         match = {
             "season": self.season,
             "match_date": None,
             "match_time": None,
             "home_team": None,
             "away_team": None,
+            "home_team_raw": None,
+            "away_team_raw": None,
             "venue": None,
-            "competition": "MLS Regular Season",
+            "competition": None,
+            "broadcast": None,
+            "match_url": None,
             "home_score": None,
             "away_score": None,
             "status": "scheduled",
         }
 
-        text = await elem.inner_text()
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        # --- Match URL (from the <a> link) ---
+        link = await elem.query_selector("a[href*='/matches/']")
+        if link:
+            href = await link.get_attribute("href")
+            if href:
+                if not href.startswith("http"):
+                    href = "https://www.mlssoccer.com" + href
+                match["match_url"] = href
 
-        # Try to extract teams
-        team_names = []
-        for line in lines:
-            # Check if line looks like a team name
-            if any(t in line for t in ["FC", "SC", "United", "City", "Galaxy", "Sounders", "Timbers", "Fire", "Crew"]):
-                team_names.append(line)
+        # --- Date stamp (e.g. "1/31" or "7/19") ---
+        date_elem = await elem.query_selector("[class*='status-stamp']")
+        if date_elem:
+            date_text = (await date_elem.inner_text()).strip()
+            match["match_date"] = date_text
 
-        if len(team_names) >= 2:
-            match["home_team"] = team_names[0]
-            match["away_team"] = team_names[1]
+        # --- Competition ---
+        comp_elem = await elem.query_selector("[class*='match-competition']")
+        if comp_elem:
+            match["competition"] = (await comp_elem.inner_text()).strip()
 
-        # Try to extract date
-        date_pattern = r'(\w+\s+\d{1,2},?\s+\d{4}|\d{1,2}/\d{1,2}/\d{2,4})'
-        for line in lines:
-            date_match = re.search(date_pattern, line)
-            if date_match:
-                match["match_date"] = date_match.group(1)
-                break
+        # --- Home team ---
+        home_club = await elem.query_selector(".mls-c-club.--home")
+        if home_club:
+            short = await home_club.query_selector(".mls-c-club__shortname")
+            abbr = await home_club.query_selector(".mls-c-club__abbreviation")
+            raw_name = (await short.inner_text()).strip() if short else ""
+            abbr_text = (await abbr.inner_text()).strip() if abbr else ""
+            match["home_team_raw"] = raw_name
+            match["home_team"] = normalize_team(raw_name, abbr_text)
 
-        # Try to extract time
-        time_pattern = r'(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?)'
-        for line in lines:
-            time_match = re.search(time_pattern, line)
-            if time_match:
-                match["match_time"] = time_match.group(1)
-                break
+        # --- Away team ---
+        away_club = await elem.query_selector(".mls-c-club.--away")
+        if away_club:
+            short = await away_club.query_selector(".mls-c-club__shortname")
+            abbr = await away_club.query_selector(".mls-c-club__abbreviation")
+            raw_name = (await short.inner_text()).strip() if short else ""
+            abbr_text = (await abbr.inner_text()).strip() if abbr else ""
+            match["away_team_raw"] = raw_name
+            match["away_team"] = normalize_team(raw_name, abbr_text)
 
-        # Try to extract score (if match is completed)
-        score_pattern = r'(\d+)\s*[-–]\s*(\d+)'
-        for line in lines:
-            score_match = re.search(score_pattern, line)
+        # --- Score / time from scorebug ---
+        scorebug = await elem.query_selector("[class*='scorebug']")
+        if scorebug:
+            bug_text = (await scorebug.inner_text()).strip()
+
+            # Check for a final score like "2\n1" or "2 - 1"
+            score_match = re.search(r'(\d+)\s*[-–]\s*(\d+)', bug_text.replace("\n", " "))
             if score_match:
                 match["home_score"] = int(score_match.group(1))
                 match["away_score"] = int(score_match.group(2))
                 match["status"] = "final"
-                break
+            else:
+                # It's a time like "4:00PM" or "7:30 PM ET"
+                time_match = re.search(r'(\d{1,2}:\d{2}\s*(?:AM|PM)?)', bug_text, re.IGNORECASE)
+                if time_match:
+                    match["match_time"] = time_match.group(1).strip()
+
+        # --- Broadcast ---
+        bc_elem = await elem.query_selector("[class*='broadcaster']")
+        if bc_elem:
+            match["broadcast"] = (await bc_elem.inner_text()).strip()
 
         return match
 
-    async def _extract_match_from_row(self, row, team_name: str) -> dict:
-        """Extract match from a table row or card."""
-        match = {
-            "season": self.season,
-            "match_date": None,
-            "match_time": None,
-            "home_team": None,
-            "away_team": None,
-            "venue": None,
-            "competition": "MLS Regular Season",
-            "home_score": None,
-            "away_score": None,
-            "status": "scheduled",
-        }
+    def _resolve_match_date(self, raw_date: str, week_label: str) -> str:
+        """Turn a short date like '3/15' into 'YYYY-MM-DD' using week context."""
+        if not raw_date:
+            return None
 
-        text = await row.inner_text()
+        m = re.match(r'(\d{1,2})/(\d{1,2})', raw_date)
+        if not m:
+            return raw_date
 
-        # Extract opponent and home/away
-        if " vs " in text.lower() or " v " in text.lower():
-            match["home_team"] = team_name
-            opponent_match = re.search(r'(?:vs?\.?\s+)([A-Za-z\s\.]+?)(?:\d|$|\n)', text, re.IGNORECASE)
-            if opponent_match:
-                match["away_team"] = opponent_match.group(1).strip()
-        elif " @ " in text or " at " in text.lower():
-            match["away_team"] = team_name
-            opponent_match = re.search(r'(?:@|at)\s+([A-Za-z\s\.]+?)(?:\d|$|\n)', text, re.IGNORECASE)
-            if opponent_match:
-                match["home_team"] = opponent_match.group(1).strip()
+        month = int(m.group(1))
+        day = int(m.group(2))
 
-        # Extract date
-        date_pattern = r'(\w{3,9}\s+\d{1,2}(?:,?\s+\d{4})?|\d{1,2}/\d{1,2}(?:/\d{2,4})?)'
-        date_match = re.search(date_pattern, text)
-        if date_match:
-            match["match_date"] = date_match.group(1)
+        # Infer year from the week label or season
+        year = self.season
+        # If we're in a Dec-Jan crossover, handle it
+        # The week label like "Dec 29 - Jan 4" can help
+        if "Jan" in week_label and month == 12:
+            year = self.season - 1
+        elif "Dec" in week_label and month == 1:
+            year = self.season + 1
 
-        # Extract time
-        time_pattern = r'(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm|ET|PT|CT)?)'
-        time_match = re.search(time_pattern, text)
-        if time_match:
-            match["match_time"] = time_match.group(1)
+        try:
+            return f"{year}-{month:02d}-{day:02d}"
+        except Exception:
+            return None
 
-        # Extract score
-        score_pattern = r'(\d+)\s*[-–]\s*(\d+)'
-        score_match = re.search(score_pattern, text)
-        if score_match:
-            match["home_score"] = int(score_match.group(1))
-            match["away_score"] = int(score_match.group(2))
-            match["status"] = "final"
-
-        return match
-
-    async def _extract_matches_from_text(self, page, team_name: str) -> list:
-        """Extract matches from page text using patterns."""
-        matches = []
-        text = await page.inner_text("body")
-
-        # Pattern for upcoming matches
-        pattern = r'(\w{3,9}\s+\d{1,2})[,\s]+(\d{4})?\s*[\n\r]+\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*[\n\r]+\s*(?:vs\.?\s+)?([A-Za-z\s\.]+)'
-
-        for match in re.finditer(pattern, text, re.IGNORECASE):
-            matches.append({
-                "season": self.season,
-                "match_date": f"{match.group(1)} {match.group(2) or self.season}",
-                "match_time": match.group(3),
-                "home_team": team_name,
-                "away_team": match.group(4).strip(),
-                "competition": "MLS Regular Season",
-                "status": "scheduled",
-            })
-
-        return matches
-
-    def save_match(self, match: dict):
+    def save_match(self, match: dict, week_label: str):
         """Save a match to the database."""
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
-            # Generate a match ID
-            match_id = f"{match.get('home_team', '')[:3]}-{match.get('away_team', '')[:3]}-{match.get('match_date', '')}"
-            match_id = re.sub(r'[^a-zA-Z0-9-]', '', match_id)
+            full_date = self._resolve_match_date(match.get("match_date"), week_label)
+            if not full_date:
+                return False
+
+            # Use match_url slug as the unique ID if available
+            match_url = match.get("match_url", "")
+            if match_url:
+                slug = match_url.rstrip("/").split("/")[-1]
+                match_id = slug
+            else:
+                match_id = (
+                    f"{match.get('home_team', '')[:3]}-"
+                    f"{match.get('away_team', '')[:3]}-"
+                    f"{full_date}"
+                )
+                match_id = re.sub(r'[^a-zA-Z0-9-]', '', match_id)
 
             cursor.execute("""
                 INSERT INTO schedules (
-                    match_id, season, match_date, match_time, home_team, away_team,
-                    venue, competition, status, home_score, away_score, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    match_id, match_url, season, match_date, match_time,
+                    home_team, away_team, home_team_raw, away_team_raw,
+                    venue, competition, broadcast, status,
+                    home_score, away_score, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(match_id) DO UPDATE SET
                     match_time = excluded.match_time,
                     venue = excluded.venue,
+                    broadcast = excluded.broadcast,
                     status = excluded.status,
                     home_score = excluded.home_score,
                     away_score = excluded.away_score,
                     updated_at = excluded.updated_at
             """, (
                 match_id,
+                match_url,
                 match.get("season"),
-                match.get("match_date"),
+                full_date,
                 match.get("match_time"),
                 match.get("home_team"),
                 match.get("away_team"),
+                match.get("home_team_raw"),
+                match.get("away_team_raw"),
                 match.get("venue"),
                 match.get("competition"),
+                match.get("broadcast"),
                 match.get("status"),
                 match.get("home_score"),
                 match.get("away_score"),
                 datetime.now().isoformat()
             ))
             conn.commit()
+            return True
         except Exception as e:
-            print(f"  Error saving match: {e}")
+            print(f"  Error saving: {e}")
+            return False
         finally:
             conn.close()
 
-    async def scrape_all_team_schedules(self):
-        """Scrape schedules for all teams."""
-        print(f"Scraping schedules for {self.season} season")
-        print("=" * 50)
+    async def scrape_full_schedule(self, start_date: str = None, end_date: str = None):
+        """
+        Scrape the full MLS schedule by loading the page once, jumping to the
+        start date via hash, then clicking "next week" until we've covered
+        enough weeks to reach end_date.
+
+        Args:
+            start_date: Start date as YYYY-MM-DD (default: Feb 1 of season year)
+            end_date:   End date as YYYY-MM-DD (default: Dec 15 of season year)
+        """
+        if not start_date:
+            start_date = f"{self.season}-02-01"
+        if not end_date:
+            end_date = f"{self.season}-12-15"
+
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        total_weeks = ((end_dt - start_dt).days // 7) + 1
+
+        print(f"Scraping MLS schedule: {start_date} through {end_date} (~{total_weeks} weeks)")
+        print("=" * 60)
 
         await self.start()
-        all_matches = []
+        page = await self.context.new_page()
+
+        total_saved = 0
+        weeks_scraped = 0
 
         try:
-            for i, team in enumerate(self.config["teams"], 1):
-                print(f"\n[{i}/{len(self.config['teams'])}] {team['name']}")
+            # 1. Load the schedule page
+            print("Loading schedule page...")
+            await page.goto(
+                "https://www.mlssoccer.com/schedule/scores",
+                wait_until="domcontentloaded",
+                timeout=60000
+            )
+            await asyncio.sleep(6)
 
-                matches = await self.scrape_team_schedule(team)
+            # 2. Jump to start date via hash
+            print(f"Jumping to {start_date}...")
+            await page.evaluate(
+                f'window.location.hash = "#competition=all&club=all&date={start_date}"'
+            )
+            await asyncio.sleep(5)
 
-                for match in matches:
-                    self.save_match(match)
-                    all_matches.append(match)
+            # 3. Walk through weeks by counting
+            current_approx = start_dt
+            prev_label = None
+            stuck_count = 0
 
-                await asyncio.sleep(REQUEST_DELAY * 2)
+            for week_num in range(total_weeks + 1):
+                week_label = await self._get_week_label(page)
 
+                # Detect stuck (same label repeated)
+                if week_label == prev_label:
+                    stuck_count += 1
+                    if stuck_count > 3:
+                        print(f"  Stuck at '{week_label}', stopping.")
+                        break
+                else:
+                    stuck_count = 0
+                prev_label = week_label
+
+                # Extract matches
+                matches = await self._extract_week_matches(page)
+
+                week_saved = 0
+                for m in matches:
+                    if self.save_match(m, week_label):
+                        week_saved += 1
+
+                total_saved += week_saved
+                weeks_scraped += 1
+                approx_str = current_approx.strftime("%Y-%m-%d")
+                print(f"  [{weeks_scraped}/{total_weeks}] [{week_label}]  {len(matches)} matches, {week_saved} saved  (total: {total_saved})")
+
+                # Click "next week"
+                next_btn = await page.query_selector(".mls-o-buttons__icon--right")
+                if not next_btn:
+                    print("  No next button found, stopping.")
+                    break
+
+                await next_btn.click()
+                await asyncio.sleep(4)
+                current_approx += timedelta(days=7)
+
+        except Exception as e:
+            print(f"\nError during scrape: {e}")
+            log_scrape("schedule", "all", "", "error", total_saved, str(e))
         finally:
+            await page.close()
             await self.stop()
 
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 60)
         print(f"Schedule scrape complete!")
+        print(f"  Weeks scraped: {weeks_scraped}")
+        print(f"  Total matches saved: {total_saved}")
+        log_scrape("schedule", "all", "mlssoccer.com", "success", total_saved)
         self._print_summary()
 
-        return all_matches
+        return total_saved
 
     def _print_summary(self):
         """Print summary statistics."""
@@ -360,20 +453,37 @@ class ScheduleScraper:
         cursor.execute("SELECT COUNT(*) FROM schedules WHERE season = ? AND status = 'scheduled'", (self.season,))
         upcoming = cursor.fetchone()[0]
 
+        cursor.execute("""
+            SELECT competition, COUNT(*) as cnt
+            FROM schedules WHERE season = ?
+            GROUP BY competition ORDER BY cnt DESC
+        """, (self.season,))
+        by_comp = cursor.fetchall()
+
+        cursor.execute("""
+            SELECT COUNT(DISTINCT home_team) + COUNT(DISTINCT away_team)
+            FROM schedules WHERE season = ?
+        """, (self.season,))
+
         conn.close()
 
         print(f"\nSummary for {self.season} season:")
         print(f"  Total matches: {total}")
         print(f"  Completed: {completed}")
-        print(f"  Upcoming: {upcoming}")
+        print(f"  Upcoming/Scheduled: {upcoming}")
+        if by_comp:
+            print(f"\n  By competition:")
+            for comp, cnt in by_comp:
+                print(f"    {comp or 'Unknown'}: {cnt}")
 
 
 async def main():
     """Main entry point."""
     import argparse
 
-    parser = argparse.ArgumentParser(description="Scrape MLS schedules")
-    parser.add_argument("--team", help="Scrape single team by slug")
+    parser = argparse.ArgumentParser(description="Scrape MLS schedule week-by-week")
+    parser.add_argument("--start", help="Start date YYYY-MM-DD")
+    parser.add_argument("--end", help="End date YYYY-MM-DD")
     parser.add_argument("--init-db", action="store_true", help="Initialize database")
     args = parser.parse_args()
 
@@ -381,21 +491,7 @@ async def main():
         init_database()
 
     scraper = ScheduleScraper()
-
-    if args.team:
-        from scrapers.config_loader import get_team_by_slug
-        team = get_team_by_slug(args.team)
-        if team:
-            await scraper.start()
-            matches = await scraper.scrape_team_schedule(team)
-            for m in matches:
-                scraper.save_match(m)
-            await scraper.stop()
-            scraper._print_summary()
-        else:
-            print(f"Team not found: {args.team}")
-    else:
-        await scraper.scrape_all_team_schedules()
+    await scraper.scrape_full_schedule(start_date=args.start, end_date=args.end)
 
 
 if __name__ == "__main__":

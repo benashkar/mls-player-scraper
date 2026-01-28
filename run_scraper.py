@@ -85,10 +85,10 @@ async def search_player_highschool(player_name: str):
     await scraper.stop()
 
 
-async def scrape_schedules():
-    """Scrape schedules for all teams."""
+async def scrape_schedules(start_date: str = None, end_date: str = None):
+    """Scrape full MLS schedule week-by-week."""
     scraper = ScheduleScraper()
-    await scraper.scrape_all_team_schedules()
+    await scraper.scrape_full_schedule(start_date=start_date, end_date=end_date)
 
 
 async def scrape_highschool_wikipedia(team_filter: str = None):
@@ -108,6 +108,8 @@ def main():
     parser.add_argument("--highschool-wiki", action="store_true", help="Find high school data (Wikipedia)")
     parser.add_argument("--highschool-player", help="Search high school for specific player")
     parser.add_argument("--schedules", action="store_true", help="Scrape match schedules")
+    parser.add_argument("--sched-start", help="Schedule start date YYYY-MM-DD")
+    parser.add_argument("--sched-end", help="Schedule end date YYYY-MM-DD")
     parser.add_argument("--view", action="store_true", help="View scraped players")
     parser.add_argument("--stats", action="store_true", help="View statistics")
     parser.add_argument("--limit", type=int, default=20, help="Limit for --view")
@@ -121,8 +123,8 @@ def main():
         print("Scraping all 30 MLS team rosters...")
         asyncio.run(scrape_all())
     elif args.schedules:
-        print("Scraping match schedules for all teams...")
-        asyncio.run(scrape_schedules())
+        print("Scraping MLS schedule week-by-week...")
+        asyncio.run(scrape_schedules(args.sched_start, args.sched_end))
     elif args.highschool_player:
         print(f"Searching for high school: {args.highschool_player}")
         asyncio.run(search_player_highschool(args.highschool_player))
