@@ -199,10 +199,39 @@ class RosterScraper:
             if weight_match:
                 player["weight"] = int(weight_match.group(1))
 
-            # Extract birthdate
-            dob_match = re.search(r'Born[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})', bio_text, re.IGNORECASE)
-            if dob_match:
-                player["birthdate"] = dob_match.group(1).strip()
+            # Extract birthdate - MLS uses format like "6.24.1987 (38)" or "Date of birth: 6.24.1987"
+            dob_patterns = [
+                r'(\d{1,2}\.\d{1,2}\.\d{4})\s*\(\d+\)',  # 6.24.1987 (38)
+                r'Date of birth[:\s]+(\d{1,2}\.\d{1,2}\.\d{4})',  # Date of birth: 6.24.1987
+                r'Born[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4})',  # Born: June 24, 1987
+                r'DOB[:\s]+(\d{1,2}/\d{1,2}/\d{4})',  # DOB: 6/24/1987
+            ]
+            for pattern in dob_patterns:
+                dob_match = re.search(pattern, bio_text, re.IGNORECASE)
+                if dob_match:
+                    player["birthdate"] = dob_match.group(1).strip()
+                    break
+
+            # Extract birthplace from MLS page
+            birthplace_patterns = [
+                r'Birthplace[:\s]+([^\n\r]+)',
+                r'Place of birth[:\s]+([^\n\r]+)',
+                r'Born in[:\s]+([^\n\r]+)',
+            ]
+            for pattern in birthplace_patterns:
+                bp_match = re.search(pattern, bio_text, re.IGNORECASE)
+                if bp_match:
+                    birthplace = bp_match.group(1).strip()
+                    # Clean up - stop at common delimiters
+                    birthplace = re.split(r'\s{2,}|Height|Weight|Position', birthplace)[0].strip()
+                    if birthplace and not player.get("birthplace"):
+                        player["birthplace"] = birthplace
+                        city, state = parse_hometown(birthplace)
+                        if city and not player.get("hometown_city"):
+                            player["hometown_city"] = city
+                        if state and not player.get("hometown_state"):
+                            player["hometown_state"] = state
+                    break
 
             # Try to get headshot
             img = await page.query_selector("img[src*='images.mlssoccer.com']")

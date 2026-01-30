@@ -32,6 +32,7 @@ from scrapers.highschool_scraper import HighSchoolScraper
 from scrapers.highschool_wikipedia import WikipediaHighSchoolScraper
 from scrapers.highschool_grokipedia import GrokipediaHighSchoolScraper
 from scrapers.schedule_scraper import ScheduleScraper
+from scrapers.transfermarkt_scraper import TransfermarktScraper
 from scrapers.view_data import show_players, show_stats
 
 
@@ -104,6 +105,12 @@ async def scrape_highschool_grokipedia(team_filter: str = None):
     await scraper.process_us_players(team_filter=team_filter)
 
 
+async def scrape_transfermarkt(field: str = "birthdate", team_filter: str = None, limit: int = 100):
+    """Fill missing player data from Transfermarkt."""
+    scraper = TransfermarktScraper()
+    await scraper.process_players_missing_data(field=field, team_filter=team_filter, limit=limit)
+
+
 def main():
     import argparse
 
@@ -116,11 +123,13 @@ def main():
     parser.add_argument("--highschool-grok", action="store_true", help="Find high school data (Grokipedia)")
     parser.add_argument("--highschool-player", help="Search high school for specific player")
     parser.add_argument("--schedules", action="store_true", help="Scrape match schedules")
+    parser.add_argument("--transfermarkt", action="store_true", help="Fill missing data from Transfermarkt")
+    parser.add_argument("--field", default="birthdate", help="Field to fill with --transfermarkt (birthdate, birthplace)")
+    parser.add_argument("--limit", type=int, default=100, help="Max players to process")
     parser.add_argument("--sched-start", help="Schedule start date YYYY-MM-DD")
     parser.add_argument("--sched-end", help="Schedule end date YYYY-MM-DD")
     parser.add_argument("--view", action="store_true", help="View scraped players")
     parser.add_argument("--stats", action="store_true", help="View statistics")
-    parser.add_argument("--limit", type=int, default=20, help="Limit for --view")
     args = parser.parse_args()
 
     if args.test:
@@ -144,6 +153,10 @@ def main():
         team = args.team if args.team else None
         print(f"Finding high school data via Grokipedia{' for ' + team if team else ''}...")
         asyncio.run(scrape_highschool_grokipedia(team))
+    elif args.transfermarkt:
+        team = args.team if args.team else None
+        print(f"Filling {args.field} data from Transfermarkt{' for ' + team if team else ''}...")
+        asyncio.run(scrape_transfermarkt(args.field, team, args.limit))
     elif args.highschool:
         team = args.team if args.team else None
         print(f"Finding high school data for players{' in ' + team if team else ''}...")
