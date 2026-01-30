@@ -75,7 +75,7 @@ class RosterScraper:
             print(f"    Using MLS.com: {mls_roster_url}")
 
             await page.goto(mls_roster_url, wait_until="domcontentloaded", timeout=45000)
-            await asyncio.sleep(3)  # Let JS render
+            await asyncio.sleep(6)  # Let JS render (increased for dynamic content)
 
             # Try multiple selector strategies (sites vary in structure)
             player_data = await self._find_player_elements(page)
